@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       test_env:
-        description: "Environment"
+        description: 'Environment'
         type: choice
         required: true
         default: qa
@@ -13,7 +13,7 @@ on:
           - staging
 
       test_type:
-        description: "Test type"
+        description: 'Test type'
         type: choice
         required: true
         default: smoke
@@ -22,7 +22,7 @@ on:
           - regression
 
       parallelization:
-        description: "Parallelization mode"
+        description: 'Parallelization mode'
         type: choice
         required: true
         default: none
@@ -32,7 +32,7 @@ on:
           - browsers
 
       browser:
-        description: "Browser (used when parallelization = none or spec-files)"
+        description: 'Browser (used when parallelization = none or spec-files)'
         type: choice
         required: true
         default: chromium
@@ -42,7 +42,7 @@ on:
           - webkit
 
       headed:
-        description: "Headed mode (debug only)"
+        description: 'Headed mode (debug only)'
         type: boolean
         required: true
         default: false
@@ -60,7 +60,7 @@ env:
 # -------------------------------
 jobs:
   single:
-    name: "Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}"
+    name: 'Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
     if: ${{ inputs.parallelization == 'none' }}
     runs-on: ubuntu-latest
 
@@ -100,12 +100,11 @@ jobs:
             test-results
           retention-days: 14
 
-
   # --------------------------------------
   # MODE 2 — PARALLEL BY SPEC FILE (SUITE)
   # --------------------------------------
   spec-files:
-    name: "Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}"
+    name: 'Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
     if: ${{ inputs.parallelization == 'spec-files' }}
     runs-on: ubuntu-latest
 
@@ -166,12 +165,11 @@ jobs:
             test-results
           retention-days: 14
 
-
   # --------------------------------------
   # MODE 3 — PARALLEL BY BROWSER
   # --------------------------------------
   browsers:
-    name: "Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}"
+    name: 'Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
     if: ${{ inputs.parallelization == 'browsers' }}
     runs-on: ubuntu-latest
 

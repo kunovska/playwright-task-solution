@@ -1,10 +1,9 @@
-// pages/components/BurgerMenu.ts
 import { expect, Locator, Page } from '@playwright/test';
+import { routes } from '../../config/routes';
 
 export class BurgerMenu {
-  readonly open: Locator;
-  readonly close: Locator;
-  readonly panel: Locator;
+  readonly openButton: Locator;
+  readonly closeButton: Locator;
 
   readonly allItems: Locator;
   readonly about: Locator;
@@ -12,9 +11,8 @@ export class BurgerMenu {
   readonly reset: Locator;
 
   constructor(private readonly page: Page) {
-    this.open = page.getByTestId('open-menu'); // image has data-test="open-menu"
-    this.close = page.getByTestId('close-menu'); // image has data-test="close-menu"
-    this.panel = page.locator('.bm-item-list');
+    this.openButton = page.locator('#react-burger-menu-btn');
+    this.closeButton = page.locator('#react-burger-cross-btn');
 
     this.allItems = page.getByTestId('inventory-sidebar-link');
     this.about = page.getByTestId('about-sidebar-link');
@@ -23,13 +21,8 @@ export class BurgerMenu {
   }
 
   async openMenu() {
-    await this.open.click();
-    await expect(this.panel).toBeVisible();
-  }
-
-  async closeMenu() {
-    await this.close.click();
-    await expect(this.panel).toBeHidden();
+    await this.openButton.click();
+    await expect(this.allItems).toBeVisible();
   }
 
   async clickAllItems() {
@@ -40,6 +33,7 @@ export class BurgerMenu {
   async clickAbout() {
     await this.openMenu();
     await this.about.click();
+    await expect(this.page).toHaveURL(routes.about);
   }
 
   async clickLogout() {

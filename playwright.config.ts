@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { env } from './config/env';
 
 const HEADLESS = process.env.HEADLESS ? process.env.HEADLESS === 'true' : true;
 
@@ -20,6 +21,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     viewport: { width: 1280, height: 720 },
+    baseURL: env.baseUrl,
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },

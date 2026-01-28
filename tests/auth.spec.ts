@@ -2,36 +2,51 @@ import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { USERS } from '../data/users';
 import { env } from '../config/env';
+import { routes } from '../config/routes';
+import { messages } from '../data/messages';
+import { ProductsPage } from '../pages/ProductsPage';
 
 test.describe('Authentication @regression', () => {
-  test('Verify user is able to login with valid credentials', async ({ page }) => {
-    const login = new LoginPage(page);
+  let login: LoginPage;
+  let products: ProductsPage;
+
+  test.beforeEach(async ({ page }) => {
+    login = new LoginPage(page);
+    products = new ProductsPage(page);
 
     await login.goto();
+    await login.expectLoaded();
+  });
+
+  test('Login with valid credentials', async ({ page }) => {
     await login.login(USERS.standard.username, env.password);
 
-    await expect(page).toHaveURL(/inventory\.html/);
-    await expect(page.getByTestId('title')).toHaveText('Products');
-    await expect(page.getByTestId('inventory-list')).toBeVisible();
+    await expect(page).toHaveURL(routes.inventory);
+    await products.expectLoaded();
   });
 
-  test('Verify user is not able to login with invalid credentials', async ({ page }) => {
-    const login = new LoginPage(page);
-
-    await login.goto();
+  test('Unable to login with invalid credentials', async ({ page }) => {
     await login.login('invalid_user', 'invalid_password');
 
-    await login.expectLoginErrorContains('Username and password do not match');
-    await expect(page).toHaveURL(/saucedemo\.com\/?$/);
+    await login.expectLoginErrorContains(messages.auth.invalidCredentials);
+    await expect(page).toHaveURL(env.baseUrl);
+    await products.expectNotLoaded();
   });
 
-  test('Locked out user cannot login (edge case)', async ({ page }) => {
-    const login = new LoginPage(page);
-
-    await login.goto();
+  test('Locked out user cannot login', async ({ page }) => {
     await login.login(USERS.lockedOut.username, env.password);
 
-    await login.expectLoginErrorContains('locked out');
-    await expect(page).toHaveURL(/saucedemo\.com\/?$/);
+    await login.expectLoginErrorContains(messages.auth.lockedOut);
+    await expect(page).toHaveURL(env.baseUrl);
+    await products.expectNotLoaded();
+  });
+
+  test('Unable to access inventory page without logging in by direct URL', async ({ page }) => {
+    await page.goto(routes.inventory);
+
+    await expect(page).toHaveURL(env.baseUrl);
+    await login.expectLoginErrorContains(messages.auth.notLoggedIn(routes.inventory));
+    await expect(page).toHaveURL(env.baseUrl);
+    await products.expectNotLoaded();
   });
 });
