@@ -1,0 +1,37 @@
+// pages/LoginPage.ts
+import { expect, Locator, Page } from '@playwright/test';
+import { env } from '../config/env';
+
+export class LoginPage {
+  readonly username: Locator;
+  readonly password: Locator;
+  readonly loginButton: Locator;
+  readonly error: Locator;
+  readonly loginContainer: Locator;
+
+  constructor(private readonly page: Page) {
+    // testIdAttribute: 'data-test'
+    this.username = page.getByTestId('username');
+    this.password = page.getByTestId('password');
+    this.loginButton = page.getByTestId('login-button');
+    this.error = page.getByTestId('error');
+    this.loginContainer = page.getByTestId('login-container');
+  }
+
+  async goto() {
+    await this.page.goto(env.baseUrl);
+    await expect(this.loginContainer).toBeVisible();
+    await expect(this.loginButton).toBeVisible();
+  }
+
+  async login(username: string, password: string) {
+    await this.username.fill(username);
+    await this.password.fill(password);
+    await this.loginButton.click();
+  }
+
+  async expectLoginErrorContains(text: string) {
+    await expect(this.error).toBeVisible();
+    await expect(this.error).toContainText(text);
+  }
+}

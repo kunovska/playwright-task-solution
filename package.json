@@ -1,0 +1,40 @@
+{
+  "name": "saucedemo-playwright-tests",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:smoke": "playwright test --grep \"@smoke\"",
+    "test:regression": "playwright test --grep \"@regression\"",
+    "test:smoke:chromium": "playwright test --project=chromium --grep \"@smoke\"",
+    "test:regression:all": "playwright test --grep \"@regression\" --project=chromium --project=firefox --project=webkit",
+    "test:headed": "HEADLESS=false playwright test",
+    "test:smoke:headed": "HEADLESS=false playwright test --grep \"@smoke\"",
+    "report": "playwright show-report",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix",
+    "format": "prettier . --check",
+    "format:fix": "prettier . --write"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@playwright/test": "^1.58.0",
+    "@types/node": "^25.0.10",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-playwright": "^2.5.1",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.54.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3"
+  }
+}
