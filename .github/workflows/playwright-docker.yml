@@ -4,68 +4,114 @@ on:
   workflow_dispatch:
     inputs:
       test_env:
-        description: 'Environment'
+        description: "Environment"
         type: choice
         required: true
         default: qa
-        options:
-          - qa
-          - staging
+        options: [qa, staging]
 
       test_type:
-        description: 'Test type'
+        description: "Test type"
         type: choice
         required: true
         default: regression
-        options:
-          - smoke
-          - regression
+        options: [smoke, regression]
 
       parallelization:
-        description: 'Parallelization mode'
+        description: "Parallelization mode"
         type: choice
         required: true
         default: none
-        options:
-          - none
-          - spec-files
-          - browsers
+        options: [none, spec-files, browsers]
 
       browser:
-        description: 'Browser (used when parallelization = none or spec-files)'
+        description: "Browser (used when parallelization = none or spec-files)"
         type: choice
         required: true
         default: chromium
-        options:
-          - chromium
-          - firefox
-          - webkit
+        options: [chromium, firefox, webkit]
 
       headed:
-        description: 'Headed mode (debug only)'
+        description: "Headed mode (debug only)"
         type: boolean
         required: true
         default: false
 
 env:
   TEST_ENV: ${{ inputs.test_env }}
-  BASE_URL_QA: ${{ vars.BASE_URL_QA || 'https://www.saucedemo.com' }}
-  BASE_URL_STAGING: ${{ vars.BASE_URL_STAGING || 'https://www.saucedemo.com' }}
-  SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+
+  # No hardcoded defaults: require repo variables
+  BASE_URL_QA: ${{ vars.BASE_URL_QA }}
+  BASE_URL_STAGING: ${{ vars.BASE_URL_STAGING }}
+
+  # Derived base url (still no hardcoded values)
+  BASE_URL: ${{ inputs.test_env == 'qa' && vars.BASE_URL_QA || vars.BASE_URL_STAGING }}
+
+  # No hardcoded defaults: require repo secret
+  SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD }}
+
   HEADLESS: ${{ inputs.headed && 'false' || 'true' }}
   CI: true
 
-# -------------------------------
-# MODE 1 — NO PARALLELIZATION
-# -------------------------------
 jobs:
+  # --------------------------------------
+  # MODE 2 SUPPORT — Discover spec files dynamically
+  # --------------------------------------
+  discover-specs:
+    name: Discover spec files
+    if: ${{ inputs.parallelization == 'spec-files' }}
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: set-matrix
+        name: Build matrix from tests/*.spec.ts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! ls tests/*.spec.ts >/dev/null 2>&1; then
+            echo "No spec files found at tests/*.spec.ts"
+            exit 1
+          fi
+
+          matrix_json=$(
+            ls -1 tests/*.spec.ts \
+              | sort \
+              | jq -R -s -c '
+                  split("\n")[:-1]
+                  | map({
+                      spec_path: .,
+                      spec_name: (split("/")[-1] | sub("\\.spec\\.ts$"; ""))
+                    })
+                '
+          )
+
+          echo "matrix=$matrix_json" >> "$GITHUB_OUTPUT"
+
+  # -------------------------------
+  # MODE 1 — NO PARALLELIZATION
+  # -------------------------------
   single:
-    name: 'Docker | Single | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
+    name: "Docker | Single | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}"
     if: ${{ inputs.parallelization == 'none' }}
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate required config (no hardcoded fallbacks)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
 
       - name: Build Docker image
         run: docker build -t saucedemo-tests .
@@ -73,20 +119,12 @@ jobs:
       - name: Run Playwright in Docker
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          # Select grep tag
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep @smoke'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep @regression'
-          fi
-
-          # Compute BASE_URL from TEST_ENV
-          if [ "${{ inputs.test_env }}" = "staging" ]; then
-            BASE_URL="${BASE_URL_STAGING}"
-          else
-            BASE_URL="${BASE_URL_QA}"
+            GREP_ARGS=(--grep '@regression')
           fi
 
           docker run --rm \
@@ -99,7 +137,9 @@ jobs:
             -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
             -v "${PWD}/playwright-report:/app/playwright-report" \
             -v "${PWD}/test-results:/app/test-results" \
-            saucedemo-tests --project=${{ inputs.browser }} $GREP
+            saucedemo-tests \
+              --project="${{ inputs.browser }}" \
+              "${GREP_ARGS[@]}"
 
       - name: Upload reports
         if: always()
@@ -112,36 +152,30 @@ jobs:
           retention-days: 14
 
   # --------------------------------------
-  # MODE 2 — PARALLEL BY SPEC FILE (SUITE)
+  # MODE 2 — PARALLEL BY SPEC FILE (DYNAMIC)
   # --------------------------------------
   spec-files:
-    name: 'Docker | Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
+    name: "Docker | Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}"
     if: ${{ inputs.parallelization == 'spec-files' }}
+    needs: discover-specs
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        spec_path:
-          - tests/auth.spec.ts
-          - tests/products.spec.ts
-          - tests/cart-all-products.spec.ts
-          - tests/checkout.spec.ts
-          - tests/burger-menu.spec.ts
-        include:
-          - spec_path: tests/auth.spec.ts
-            spec_name: auth
-          - spec_path: tests/products.spec.ts
-            spec_name: products
-          - spec_path: tests/cart-all-products.spec.ts
-            spec_name: cart
-          - spec_path: tests/checkout.spec.ts
-            spec_name: checkout
-          - spec_path: tests/burger-menu.spec.ts
-            spec_name: burger-menu
+        include: ${{ fromJson(needs.discover-specs.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate required config (no hardcoded fallbacks)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
 
       - name: Build Docker image
         run: docker build -t saucedemo-tests .
@@ -149,18 +183,12 @@ jobs:
       - name: Run Playwright in Docker (single spec)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep @smoke'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep @regression'
-          fi
-
-          if [ "${{ inputs.test_env }}" = "staging" ]; then
-            BASE_URL="${BASE_URL_STAGING}"
-          else
-            BASE_URL="${BASE_URL_QA}"
+            GREP_ARGS=(--grep '@regression')
           fi
 
           docker run --rm \
@@ -173,7 +201,10 @@ jobs:
             -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
             -v "${PWD}/playwright-report:/app/playwright-report" \
             -v "${PWD}/test-results:/app/test-results" \
-            saucedemo-tests --project=${{ inputs.browser }} $GREP ${{ matrix.spec_path }}
+            saucedemo-tests \
+              --project="${{ inputs.browser }}" \
+              "${GREP_ARGS[@]}" \
+              "${{ matrix.spec_path }}"
 
       - name: Upload reports
         if: always()
@@ -189,7 +220,7 @@ jobs:
   # MODE 3 — PARALLEL BY BROWSER
   # --------------------------------------
   browsers:
-    name: 'Docker | Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
+    name: "Docker | Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}"
     if: ${{ inputs.parallelization == 'browsers' }}
     runs-on: ubuntu-latest
 
@@ -201,24 +232,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate required config (no hardcoded fallbacks)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
+
       - name: Build Docker image
         run: docker build -t saucedemo-tests .
 
       - name: Run Playwright in Docker (all tests)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep @smoke'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep @regression'
-          fi
-
-          if [ "${{ inputs.test_env }}" = "staging" ]; then
-            BASE_URL="${BASE_URL_STAGING}"
-          else
-            BASE_URL="${BASE_URL_QA}"
+            GREP_ARGS=(--grep '@regression')
           fi
 
           docker run --rm \
@@ -231,7 +265,9 @@ jobs:
             -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
             -v "${PWD}/playwright-report:/app/playwright-report" \
             -v "${PWD}/test-results:/app/test-results" \
-            saucedemo-tests --project=${{ matrix.browser }} $GREP
+            saucedemo-tests \
+              --project="${{ matrix.browser }}" \
+              "${GREP_ARGS[@]}"
 
       - name: Upload reports
         if: always()

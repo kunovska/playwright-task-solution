@@ -1,4 +1,4 @@
-name: Playwright E2E CI
+name: Playwright E2E (CI)
 
 on:
   workflow_dispatch:
@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+      image: mcr.microsoft.com/playwright:v1.58.0-jammy
 
     steps:
       - uses: actions/checkout@v4
@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+      image: mcr.microsoft.com/playwright:v1.58.0-jammy
 
     strategy:
       fail-fast: false
@@ -224,7 +224,7 @@ jobs:
     runs-on: ubuntu-latest
 
     container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+      image: mcr.microsoft.com/playwright:v1.58.0-jammy
 
     strategy:
       fail-fast: false
