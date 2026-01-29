@@ -1,11 +1,11 @@
 export const messages = {
   auth: {
-    invalidCredentials: 'Username and password do not match',
-    missingUsername: 'Username is required',
-    missingPassword: 'Password is required',
-    lockedOut: 'Sorry, this user has been locked out',
+    invalidCredentials: 'Epic sadface: Username and password do not match',
+    missingUsername: 'Epic sadface: Username is required',
+    missingPassword: 'Epic sadface: Password is required',
+    lockedOut: 'Epic sadface: Sorry, this user has been locked out',
 
-    notLoggedIn: (route: string) => `You can only access '${route}' when you are logged in.`,
+    notLoggedIn: (route: string) => `Epic sadface: You can only access '${route}' when you are logged in.`,
   },
   checkout: {
     firstNameRequired: 'First Name is required',

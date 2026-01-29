@@ -1,18 +1,29 @@
 import dotenv from 'dotenv';
 
-dotenv.config({ path: '.env.local' });
+const isCI = process.env.CI === 'true';
+
+// Only load .env.local for LOCAL runs (never override CI)
+if (!isCI) {
+  dotenv.config({ path: '.env.local' });
+}
 
 type Environment = 'qa' | 'staging';
 
-const envName = (process.env.TEST_ENV || 'qa') as Environment;
+function required(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing required env var: ${name}`);
+  return v;
+}
+
+const envName = required('TEST_ENV') as Environment;
 
 const baseUrls: Record<Environment, string> = {
-  qa: process.env.BASE_URL_QA!,
-  staging: process.env.BASE_URL_STAGING!,
+  qa: required('BASE_URL_QA'),
+  staging: required('BASE_URL_STAGING'),
 };
 
 export const env = {
   name: envName,
   baseUrl: baseUrls[envName],
-  password: process.env.SAUCE_PASSWORD!,
+  password: required('SAUCE_PASSWORD'),
 };
