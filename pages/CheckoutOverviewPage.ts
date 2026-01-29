@@ -1,5 +1,6 @@
 import { expect, Locator, Page } from '@playwright/test';
 import { BurgerMenu } from './components/BurgerMenu';
+import { routes } from '../config/routes';
 
 export class CheckoutOverviewPage {
   readonly title: Locator;
@@ -21,10 +22,10 @@ export class CheckoutOverviewPage {
   readonly menu: BurgerMenu;
 
   constructor(private readonly page: Page) {
-    this.title = page.getByTestId('title'); // "Checkout: Overview"
+    this.title = page.getByTestId('title');
     this.container = page.getByTestId('checkout-summary-container');
 
-    this.cartList = page.getByTestId('cart-list');
+    this.cartList = page.getByTestId('cart_list');
     this.items = page.getByTestId('inventory-item');
 
     this.paymentInfoValue = page.getByTestId('payment-info-value');
@@ -41,16 +42,21 @@ export class CheckoutOverviewPage {
   }
 
   async expectLoaded() {
-    await expect(this.page).toHaveURL(/checkout-step-two\.html/);
+    await expect(this.page).toHaveURL(routes.checkoutOverview);
     await expect(this.container).toBeVisible();
     await expect(this.title).toHaveText('Checkout: Overview');
   }
 
-  async expectItemPresent(title: string) {
+  async expectItemPresent(title: string, price?: number) {
     const row = this.items.filter({
       has: this.page.getByTestId('inventory-item-name').filter({ hasText: title }),
     });
+
     await expect(row).toHaveCount(1);
+
+    if (price !== undefined) {
+      await expect(row.getByTestId('inventory-item-price')).toContainText(price.toFixed(2));
+    }
   }
 
   async expectTotalsPresent() {

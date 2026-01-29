@@ -1,0 +1,32 @@
+# Node & dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Playwright artifacts
+playwright-report
+test-results
+blob-report
+trace.zip
+
+# Build outputs
+dist
+build
+out
+coverage
+
+# IDE / OS junk
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+
+# Env files 
+.env.local
+.env.*

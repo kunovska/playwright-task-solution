@@ -1,4 +1,3 @@
-// pages/CartPage.ts
 import { expect, Locator, Page } from '@playwright/test';
 import { routes } from '../config/routes';
 
@@ -42,5 +41,9 @@ export class CartPage {
   async removeProductByAddToCartTestId(addToCartTestId: string) {
     const removeTestId = addToCartTestId.replace(/^add-to-cart-/, 'remove-');
     await this.page.getByTestId(removeTestId).click();
+  }
+
+  async checkoutNow() {
+    await this.checkout.click();
   }
 }

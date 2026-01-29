@@ -1,0 +1,215 @@
+name: Playwright E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_env:
+        description: 'Environment'
+        type: choice
+        required: true
+        default: qa
+        options:
+          - qa
+          - staging
+
+      test_type:
+        description: 'Test type'
+        type: choice
+        required: true
+        default: regression
+        options:
+          - smoke
+          - regression
+
+      parallelization:
+        description: 'Parallelization mode'
+        type: choice
+        required: true
+        default: none
+        options:
+          - none
+          - spec-files
+          - browsers
+
+      browser:
+        description: 'Browser (used when parallelization = none or spec-files)'
+        type: choice
+        required: true
+        default: chromium
+        options:
+          - chromium
+          - firefox
+          - webkit
+
+      headed:
+        description: 'Headed mode (debug only)'
+        type: boolean
+        required: true
+        default: false
+
+env:
+  TEST_ENV: ${{ inputs.test_env }}
+  BASE_URL_QA: ${{ vars.BASE_URL_QA || 'https://www.saucedemo.com' }}
+  BASE_URL_STAGING: ${{ vars.BASE_URL_STAGING || 'https://www.saucedemo.com' }}
+  SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+  HEADLESS: ${{ inputs.headed && 'false' || 'true' }}
+  CI: true
+
+# -------------------------------
+# MODE 1 — NO PARALLELIZATION
+# -------------------------------
+jobs:
+  single:
+    name: 'Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
+    if: ${{ inputs.parallelization == 'none' }}
+    runs-on: ubuntu-latest
+
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run Playwright
+        shell: bash
+        run: |
+          set -e
+
+          if [ "${{ inputs.test_type }}" = "smoke" ]; then
+            GREP='--grep "@smoke"'
+          else
+            GREP='--grep "@regression"'
+          fi
+
+          npx playwright test --project=${{ inputs.browser }} $GREP
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-single
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
+  # --------------------------------------
+  # MODE 2 — PARALLEL BY SPEC FILE (SUITE)
+  # --------------------------------------
+  spec-files:
+    name: 'Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
+    if: ${{ inputs.parallelization == 'spec-files' }}
+    runs-on: ubuntu-latest
+
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+
+    strategy:
+      fail-fast: false
+      matrix:
+        spec_path:
+          - tests/auth.spec.ts
+          - tests/products.spec.ts
+          - tests/cart-all-products.spec.ts
+          - tests/checkout.spec.ts
+          - tests/burger-menu.spec.ts
+        include:
+          - spec_path: tests/auth.spec.ts
+            spec_name: auth
+          - spec_path: tests/products.spec.ts
+            spec_name: products
+          - spec_path: tests/cart-all-products.spec.ts
+            spec_name: cart
+          - spec_path: tests/checkout.spec.ts
+            spec_name: checkout
+          - spec_path: tests/burger-menu.spec.ts
+            spec_name: burger-menu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run Playwright (single spec)
+        shell: bash
+        run: |
+          set -e
+
+          if [ "${{ inputs.test_type }}" = "smoke" ]; then
+            GREP='--grep "@smoke"'
+          else
+            GREP='--grep "@regression"'
+          fi
+
+          npx playwright test --project=${{ inputs.browser }} $GREP ${{ matrix.spec_path }}
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-${{ matrix.spec_name }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+
+  # --------------------------------------
+  # MODE 3 — PARALLEL BY BROWSER
+  # --------------------------------------
+  browsers:
+    name: 'Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
+    if: ${{ inputs.parallelization == 'browsers' }}
+    runs-on: ubuntu-latest
+
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-jammy
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run Playwright (all tests)
+        shell: bash
+        run: |
+          set -e
+
+          if [ "${{ inputs.test_type }}" = "smoke" ]; then
+            GREP='--grep "@smoke"'
+          else
+            GREP='--grep "@regression"'
+          fi
+
+          npx playwright test --project=${{ matrix.browser }} $GREP
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ matrix.browser }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

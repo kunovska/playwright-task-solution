@@ -1,3 +1,4 @@
+// tests/checkout.spec.ts
 import { test } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { ProductsPage } from '../pages/ProductsPage';
@@ -10,6 +11,7 @@ import { USERS } from '../data/users';
 import { env } from '../config/env';
 import { PRODUCTS } from '../data/products';
 import { messages } from '../data/messages';
+import { CHECKOUT_DATA } from '../data/checkout';
 
 test.describe('Checkout @smoke @regression', () => {
   let login: LoginPage;
@@ -45,11 +47,11 @@ test.describe('Checkout @smoke @regression', () => {
     await cart.checkoutNow();
 
     await info.expectLoaded();
-    await info.fill({ firstName: 'John', lastName: 'Doe', postalCode: '1000' });
+    await info.fill(CHECKOUT_DATA.valid);
     await info.continueNext();
 
     await overview.expectLoaded();
-    await overview.expectItemPresent(backpack.title);
+    await overview.expectItemPresent(backpack.title, backpack.price);
     await overview.expectTotalsPresent();
     await overview.finishCheckout();
 
@@ -66,10 +68,10 @@ test.describe('Checkout @smoke @regression', () => {
     await cart.checkoutNow();
 
     await info.expectLoaded();
-    await info.fill({ firstName: 'John', lastName: 'Doe', postalCode: '' });
+    await info.fill(CHECKOUT_DATA.missingPostalCode);
     await info.continueNext();
 
     await info.expectErrorContains(messages.checkout.postalCodeRequired);
-    await info.expectLoaded(); 
+    await info.expectLoaded();
   });
 });

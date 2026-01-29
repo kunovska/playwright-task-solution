@@ -23,6 +23,28 @@ export default [
     },
     rules: {
       ...playwright.configs.recommended.rules,
+
+      // Fix false positives for POM-style assertions
+      'playwright/expect-expect': [
+        'warn',
+        {
+          assertFunctionNames: [
+            // Page object assertions
+            'expectLoaded',
+            'expectNotLoaded',
+            'expectCartCount',
+            'expectCartBadgeCount',
+            'expectItemPresent',
+            'expectItemNotPresent',
+            'expectTotalsPresent',
+            'expectErrorContains',
+            'expectProductCardHasContent',
+
+            // Auth / login helpers
+            'expectOnLoginPage',
+          ],
+        },
+      ],
     },
   },
 

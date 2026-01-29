@@ -1,5 +1,5 @@
-// pages/CheckoutCompletePage.ts
 import { expect, Locator, Page } from '@playwright/test';
+import { routes } from '../config/routes';
 
 export class CheckoutCompletePage {
   readonly title: Locator;
@@ -7,13 +7,13 @@ export class CheckoutCompletePage {
   readonly backHome: Locator;
 
   constructor(private readonly page: Page) {
-    this.title = page.getByTestId('title'); // "Checkout: Complete!"
+    this.title = page.getByTestId('title');
     this.completeHeader = page.getByTestId('complete-header');
     this.backHome = page.getByTestId('back-to-products');
   }
 
   async expectLoaded() {
-    await expect(this.page).toHaveURL(/checkout-complete\.html/);
+    await expect(this.page).toHaveURL(routes.checkoutComplete);
     await expect(this.title).toHaveText('Checkout: Complete!');
     await expect(this.completeHeader).toBeVisible();
   }

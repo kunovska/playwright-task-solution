@@ -1,5 +1,4 @@
 import { expect, Locator, Page } from '@playwright/test';
-import { routes } from '../../config/routes';
 
 export class BurgerMenu {
   readonly openButton: Locator;
@@ -30,10 +29,10 @@ export class BurgerMenu {
     await this.allItems.click();
   }
 
-  async clickAbout() {
+  async clickAbout(): Promise<Page> {
     await this.openMenu();
-    await this.about.click();
-    await expect(this.page).toHaveURL(routes.about);
+    await Promise.all([this.about.click()]);
+    return this.page;
   }
 
   async clickLogout() {

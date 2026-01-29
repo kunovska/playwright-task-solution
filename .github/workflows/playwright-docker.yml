@@ -1,4 +1,4 @@
-name: Playwright E2E
+name: Playwright E2E (Docker)
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ on:
         description: 'Test type'
         type: choice
         required: true
-        default: smoke
+        default: regression
         options:
           - smoke
           - regression
@@ -60,41 +60,52 @@ env:
 # -------------------------------
 jobs:
   single:
-    name: 'Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
+    name: 'Docker | Single | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
     if: ${{ inputs.parallelization == 'none' }}
     runs-on: ubuntu-latest
-
-    container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Build Docker image
+        run: docker build -t saucedemo-tests .
 
-      - run: npm ci
-
-      - name: Run Playwright
+      - name: Run Playwright in Docker
         shell: bash
         run: |
           set -e
 
+          # Select grep tag
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP='--grep @smoke'
           else
-            GREP='--grep "@regression"'
+            GREP='--grep @regression'
           fi
 
-          npx playwright test --project=${{ inputs.browser }} $GREP
+          # Compute BASE_URL from TEST_ENV
+          if [ "${{ inputs.test_env }}" = "staging" ]; then
+            BASE_URL="${BASE_URL_STAGING}"
+          else
+            BASE_URL="${BASE_URL_QA}"
+          fi
+
+          docker run --rm \
+            -e CI=true \
+            -e HEADLESS="${HEADLESS}" \
+            -e TEST_ENV="${TEST_ENV}" \
+            -e SAUCE_PASSWORD="${SAUCE_PASSWORD}" \
+            -e BASE_URL="${BASE_URL}" \
+            -e BASE_URL_QA="${BASE_URL_QA}" \
+            -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
+            -v "${PWD}/playwright-report:/app/playwright-report" \
+            -v "${PWD}/test-results:/app/test-results" \
+            saucedemo-tests --project=${{ inputs.browser }} $GREP
 
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-single
+          name: report-docker-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-single
           path: |
             playwright-report
             test-results
@@ -104,12 +115,9 @@ jobs:
   # MODE 2 — PARALLEL BY SPEC FILE (SUITE)
   # --------------------------------------
   spec-files:
-    name: 'Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
+    name: 'Docker | Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
     if: ${{ inputs.parallelization == 'spec-files' }}
     runs-on: ubuntu-latest
-
-    container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
 
     strategy:
       fail-fast: false
@@ -135,31 +143,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Build Docker image
+        run: docker build -t saucedemo-tests .
 
-      - run: npm ci
-
-      - name: Run Playwright (single spec)
+      - name: Run Playwright in Docker (single spec)
         shell: bash
         run: |
           set -e
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP='--grep @smoke'
           else
-            GREP='--grep "@regression"'
+            GREP='--grep @regression'
           fi
 
-          npx playwright test --project=${{ inputs.browser }} $GREP ${{ matrix.spec_path }}
+          if [ "${{ inputs.test_env }}" = "staging" ]; then
+            BASE_URL="${BASE_URL_STAGING}"
+          else
+            BASE_URL="${BASE_URL_QA}"
+          fi
+
+          docker run --rm \
+            -e CI=true \
+            -e HEADLESS="${HEADLESS}" \
+            -e TEST_ENV="${TEST_ENV}" \
+            -e SAUCE_PASSWORD="${SAUCE_PASSWORD}" \
+            -e BASE_URL="${BASE_URL}" \
+            -e BASE_URL_QA="${BASE_URL_QA}" \
+            -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
+            -v "${PWD}/playwright-report:/app/playwright-report" \
+            -v "${PWD}/test-results:/app/test-results" \
+            saucedemo-tests --project=${{ inputs.browser }} $GREP ${{ matrix.spec_path }}
 
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-${{ matrix.spec_name }}
+          name: report-docker-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ inputs.browser }}-${{ matrix.spec_name }}
           path: |
             playwright-report
             test-results
@@ -169,12 +189,9 @@ jobs:
   # MODE 3 — PARALLEL BY BROWSER
   # --------------------------------------
   browsers:
-    name: 'Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
+    name: 'Docker | Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
     if: ${{ inputs.parallelization == 'browsers' }}
     runs-on: ubuntu-latest
-
-    container:
-      image: mcr.microsoft.com/playwright:v1.57.0-jammy
 
     strategy:
       fail-fast: false
@@ -184,31 +201,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
+      - name: Build Docker image
+        run: docker build -t saucedemo-tests .
 
-      - run: npm ci
-
-      - name: Run Playwright (all tests)
+      - name: Run Playwright in Docker (all tests)
         shell: bash
         run: |
           set -e
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP='--grep @smoke'
           else
-            GREP='--grep "@regression"'
+            GREP='--grep @regression'
           fi
 
-          npx playwright test --project=${{ matrix.browser }} $GREP
+          if [ "${{ inputs.test_env }}" = "staging" ]; then
+            BASE_URL="${BASE_URL_STAGING}"
+          else
+            BASE_URL="${BASE_URL_QA}"
+          fi
+
+          docker run --rm \
+            -e CI=true \
+            -e HEADLESS="${HEADLESS}" \
+            -e TEST_ENV="${TEST_ENV}" \
+            -e SAUCE_PASSWORD="${SAUCE_PASSWORD}" \
+            -e BASE_URL="${BASE_URL}" \
+            -e BASE_URL_QA="${BASE_URL_QA}" \
+            -e BASE_URL_STAGING="${BASE_URL_STAGING}" \
+            -v "${PWD}/playwright-report:/app/playwright-report" \
+            -v "${PWD}/test-results:/app/test-results" \
+            saucedemo-tests --project=${{ matrix.browser }} $GREP
 
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: report-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ matrix.browser }}
+          name: report-docker-${{ inputs.test_env }}-${{ inputs.test_type }}-${{ matrix.browser }}
           path: |
             playwright-report
             test-results

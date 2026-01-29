@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { LoginPage } from '../pages/LoginPage';
 import { ProductsPage } from '../pages/ProductsPage';
 import { CartPage } from '../pages/CartPage';
@@ -7,6 +7,7 @@ import { Header } from '../pages/components/Header';
 import { USERS } from '../data/users';
 import { env } from '../config/env';
 import { PRODUCTS } from '../data/products';
+import { routes } from '../config/routes';
 
 test.describe('Burger Menu @smoke @regression', () => {
   let login: LoginPage;
@@ -38,7 +39,8 @@ test.describe('Burger Menu @smoke @regression', () => {
   });
 
   test('About navigates to SauceLabs site', async () => {
-    await menu.clickAbout();
+    const aboutPage = await menu.clickAbout();
+    await expect(aboutPage).toHaveURL(routes.about);
   });
 
   test('Logout logs user out and returns to login page', async () => {

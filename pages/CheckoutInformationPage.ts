@@ -1,6 +1,6 @@
-// pages/CheckoutInformationPage.ts
 import { expect, Locator, Page } from '@playwright/test';
 import { BurgerMenu } from './components/BurgerMenu';
+import { routes } from '../config/routes';
 
 export type CheckoutInfo = {
   firstName: string;
@@ -24,7 +24,7 @@ export class CheckoutInformationPage {
   readonly menu: BurgerMenu;
 
   constructor(private readonly page: Page) {
-    this.title = page.getByTestId('title'); // "Checkout: Your Information"
+    this.title = page.getByTestId('title');
     this.container = page.getByTestId('checkout-info-container');
 
     this.firstName = page.getByTestId('firstName');
@@ -40,7 +40,7 @@ export class CheckoutInformationPage {
   }
 
   async expectLoaded() {
-    await expect(this.page).toHaveURL(/checkout-step-one\.html/);
+    await expect(this.page).toHaveURL(routes.checkoutInfo);
     await expect(this.container).toBeVisible();
     await expect(this.title).toHaveText('Checkout: Your Information');
   }
