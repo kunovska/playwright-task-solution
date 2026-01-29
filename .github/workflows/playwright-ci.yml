@@ -1,10 +1,10 @@
-name: Playwright E2E
+name: Playwright E2E CI
 
 on:
   workflow_dispatch:
     inputs:
       test_env:
-        description: 'Environment'
+        description: "Environment"
         type: choice
         required: true
         default: qa
@@ -13,7 +13,7 @@ on:
           - staging
 
       test_type:
-        description: 'Test type'
+        description: "Test type"
         type: choice
         required: true
         default: regression
@@ -22,7 +22,7 @@ on:
           - regression
 
       parallelization:
-        description: 'Parallelization mode'
+        description: "Parallelization mode"
         type: choice
         required: true
         default: none
@@ -32,7 +32,7 @@ on:
           - browsers
 
       browser:
-        description: 'Browser (used when parallelization = none or spec-files)'
+        description: "Browser (used when parallelization = none or spec-files)"
         type: choice
         required: true
         default: chromium
@@ -42,25 +42,67 @@ on:
           - webkit
 
       headed:
-        description: 'Headed mode (debug only)'
+        description: "Headed mode (debug only)"
         type: boolean
         required: true
         default: false
 
 env:
   TEST_ENV: ${{ inputs.test_env }}
-  BASE_URL_QA: ${{ vars.BASE_URL_QA || 'https://www.saucedemo.com' }}
-  BASE_URL_STAGING: ${{ vars.BASE_URL_STAGING || 'https://www.saucedemo.com' }}
-  SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD || 'secret_sauce' }}
+
+  BASE_URL_QA: ${{ vars.BASE_URL_QA }}
+  BASE_URL_STAGING: ${{ vars.BASE_URL_STAGING }}
+
+  BASE_URL: ${{ inputs.test_env == 'qa' && vars.BASE_URL_QA || vars.BASE_URL_STAGING }}
+
+  SAUCE_PASSWORD: ${{ secrets.SAUCE_PASSWORD }}
   HEADLESS: ${{ inputs.headed && 'false' || 'true' }}
   CI: true
 
-# -------------------------------
-# MODE 1 — NO PARALLELIZATION
-# -------------------------------
+# --------------------------------------
+# Helper: Discover spec files dynamically
+# (Only runs when parallelization == spec-files)
+# --------------------------------------
 jobs:
+  discover-specs:
+    name: Discover spec files
+    if: ${{ inputs.parallelization == 'spec-files' }}
+    runs-on: ubuntu-latest
+
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: set-matrix
+        name: Build matrix from tests/*.spec.ts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! ls tests/*.spec.ts >/dev/null 2>&1; then
+            echo "No spec files found at tests/*.spec.ts"
+            echo "matrix=[]" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # Produce: [{"spec_path":"tests/foo.spec.ts","spec_name":"foo"}, ...]
+          matrix_json=$(ls tests/*.spec.ts | sort | jq -R -s -c '
+            split("\n")[:-1]
+            | map({
+                spec_path: .,
+                spec_name: (split("/")[-1] | sub("\\.spec\\.ts$"; ""))
+              })
+          ')
+
+          echo "matrix=$matrix_json" >> "$GITHUB_OUTPUT"
+
+  # -------------------------------
+  # MODE 1 — NO PARALLELIZATION
+  # -------------------------------
   single:
-    name: 'Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}'
+    name: "Single run | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }}"
     if: ${{ inputs.parallelization == 'none' }}
     runs-on: ubuntu-latest
 
@@ -77,18 +119,29 @@ jobs:
 
       - run: npm ci
 
+      - name: Validate required env (no hardcoded fallbacks)
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
+
       - name: Run Playwright
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep "@regression"'
+            GREP_ARGS=(--grep '@regression')
           fi
 
-          npx playwright test --project=${{ inputs.browser }} $GREP
+          npx playwright test \
+            --project="${{ inputs.browser }}" \
+            "${GREP_ARGS[@]}"
 
       - name: Upload reports
         if: always()
@@ -101,11 +154,12 @@ jobs:
           retention-days: 14
 
   # --------------------------------------
-  # MODE 2 — PARALLEL BY SPEC FILE (SUITE)
+  # MODE 2 — PARALLEL BY SPEC FILE (AUTO)
   # --------------------------------------
   spec-files:
-    name: 'Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}'
+    name: "Spec parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ inputs.browser }} | ${{ matrix.spec_name }}"
     if: ${{ inputs.parallelization == 'spec-files' }}
+    needs: discover-specs
     runs-on: ubuntu-latest
 
     container:
@@ -114,23 +168,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        spec_path:
-          - tests/auth.spec.ts
-          - tests/products.spec.ts
-          - tests/cart-all-products.spec.ts
-          - tests/checkout.spec.ts
-          - tests/burger-menu.spec.ts
-        include:
-          - spec_path: tests/auth.spec.ts
-            spec_name: auth
-          - spec_path: tests/products.spec.ts
-            spec_name: products
-          - spec_path: tests/cart-all-products.spec.ts
-            spec_name: cart
-          - spec_path: tests/checkout.spec.ts
-            spec_name: checkout
-          - spec_path: tests/burger-menu.spec.ts
-            spec_name: burger-menu
+        include: ${{ fromJson(needs.discover-specs.outputs.matrix) }}
 
     steps:
       - uses: actions/checkout@v4
@@ -142,18 +180,30 @@ jobs:
 
       - run: npm ci
 
+      - name: Validate required env
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
+
       - name: Run Playwright (single spec)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep "@regression"'
+            GREP_ARGS=(--grep '@regression')
           fi
 
-          npx playwright test --project=${{ inputs.browser }} $GREP ${{ matrix.spec_path }}
+          npx playwright test \
+            --project="${{ inputs.browser }}" \
+            "${GREP_ARGS[@]}" \
+            "${{ matrix.spec_path }}"
 
       - name: Upload reports
         if: always()
@@ -169,7 +219,7 @@ jobs:
   # MODE 3 — PARALLEL BY BROWSER
   # --------------------------------------
   browsers:
-    name: 'Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}'
+    name: "Browser parallel | ${{ inputs.test_env }} | ${{ inputs.test_type }} | ${{ matrix.browser }}"
     if: ${{ inputs.parallelization == 'browsers' }}
     runs-on: ubuntu-latest
 
@@ -191,18 +241,29 @@ jobs:
 
       - run: npm ci
 
+      - name: Validate required env 
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${BASE_URL_QA:?Missing repo variable BASE_URL_QA}"
+          : "${BASE_URL_STAGING:?Missing repo variable BASE_URL_STAGING}"
+          : "${BASE_URL:?BASE_URL resolved empty (check test_env and repo vars)}"
+          : "${SAUCE_PASSWORD:?Missing repo secret SAUCE_PASSWORD}"
+
       - name: Run Playwright (all tests)
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           if [ "${{ inputs.test_type }}" = "smoke" ]; then
-            GREP='--grep "@smoke"'
+            GREP_ARGS=(--grep '@smoke')
           else
-            GREP='--grep "@regression"'
+            GREP_ARGS=(--grep '@regression')
           fi
 
-          npx playwright test --project=${{ matrix.browser }} $GREP
+          npx playwright test \
+            --project="${{ matrix.browser }}" \
+            "${GREP_ARGS[@]}"
 
       - name: Upload reports
         if: always()
