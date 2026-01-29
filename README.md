@@ -182,7 +182,7 @@ Edit `.env.local`:
 TEST_ENV=qa
 BASE_URL_QA=https://www.saucedemo.com
 BASE_URL_STAGING=https://www.saucedemo.com
-SAUCE_PASSWORD=secret_sauce
+SAUCE_PASSWORD=enter_password_here
 ```
 
 ---
@@ -239,6 +239,31 @@ test.describe('Login @smoke', () => {});
 ---
 
 ## GitHub Actions Pipeline Architecture
+
+### CI Workflows Overview
+
+This project includes two GitHub Actions workflows for running Playwright E2E tests.
+
+ `playwright-ci.yml` - Native Execution
+
+Runs tests directly inside a GitHub Actions job using the official Playwright Docker image. Best for standard CI pipelines and fast feedback.
+
+- Faster execution  
+- Simpler setup  
+- No custom Docker build  
+
+---
+
+`playwright-docker.yml` - Docker-based Execution
+
+Builds and runs tests inside a custom Docker image. Best for environments requiring strict runtime consistency and production parity.
+
+- Full environment isolation  
+- Reproducible runtime  
+- Production-like setup  
+
+---
+
 
 ### Selectable Inputs:
 
